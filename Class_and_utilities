@@ -41,7 +41,7 @@ class My_MI:
             bins=((xma-xmi)*lx**(1/3))/(2*iqr)    #Freedman-Diaconis rule
             bins=int(np.ceil(bins))
         #print(str(len(x))+" data points,"+str(bins)+" bins")
-        return 50
+        return bins
     
     def bin_ind(self,x,mini,maxi,steps):
     #Return bin index of x
