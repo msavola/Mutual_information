@@ -201,11 +201,11 @@ class My_Mi:
     #steps is the number of steps to be offset
         lx=len(x)
         if steps>=0:
-            off_x=x[steps:]
-            off_y=y[0:lx-steps]
+            off_x=x[0:lx-steps]
+            off_y=y[steps:]
         if steps<0:
-            off_x=x[0:lx+steps]
-            off_y=y[-steps:]
+            off_x=x[-steps:]
+            off_y=y[0:lx+steps] 
         #print("Power precedes flux by",steps,"time steps")
         return off_x, off_y, steps
 
