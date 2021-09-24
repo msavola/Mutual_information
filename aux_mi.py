@@ -9,8 +9,12 @@ Created on Wed Jul  1 11:12:10 2020
 import matplotlib.pyplot as plt
 import random
 import numpy as np
+import scipy.stats as stats
 from itertools import dropwhile
+from itertools import groupby
 import os
+import sys
+import numpy.polynomial.polynomial as poly
 
 #Functions for reading in data, writing into file and saving figures
 def new_comment(f,txt):
@@ -137,6 +141,19 @@ def finder(name1):
     res=name1[ind-3:ind+lword1]
     import pdb; pdb.set_trace()
     return res
+
+def figstodir(fesafile):
+    directory = "plots/FESA"+finder(fesafile).replace(".","_")   
+    parent_dir = "/Users/mikkosavola/Documents/Opiskelu_HY/Kandidaatintutkielma" #Parent Directory path 
+    path = os.path.join(parent_dir, directory)  # Path 
+  
+    try:
+        os.makedirs(path) #Create directory
+        print("Directory '% s' created" % directory) 
+        return path
+    except OSError as error:
+        print("Folder",path,"exists already")
+        return path
     
 def transf_name(_ufunc):
     #Returns the "name" of a utility function ufunc when given str(ufunc) as input
@@ -185,6 +202,14 @@ def hours_avg(arr1,hours):
             narr.append(np.nanmean(arr1[start:end]))
         return np.asarray(narr,dtype=np.float64)
     
+def moving_average(x,step):
+    #Evaluates the moving average of the vector x in sets of size step
+    narr=[]
+    for ii in range(len(x)-step+1):
+        x_temp=x[ii:ii+step]
+        narr.append(np.nanmean(x_temp)) 
+    return np.asarray(narr,dtype=np.float64)
+    
 
 
 
@@ -193,13 +218,13 @@ def hours_avg(arr1,hours):
 ##################
     #FUNCTIONS FOR PLOTTING
 
-def plot_w_noise(x,y,sigma,nsigma,lbl,ttl):
+def plot_w_noise(x,y,noise,sigma,nsigma,xlabel,ylabel,lbl_1,lbl_2,ttl):
     #Plot
-    plt.plot(x,y,'bo',label=lbl)
+    plt.plot(x,y,'bo',label=lbl_1)
     txt=str("Noise with "+str(nsigma)+" confidence interval")
-    plt.plot(x,y,color="orange",label=lbl)
-    plt.fill_between(x,y-nsigma*sigma,y+nsigma*sigma,label=txt, color='orange', alpha=.1)
-    add_labels("time offset (steps)", "mutual information (bits)",ttl)
+    plt.plot(x,noise,color="orange",label=lbl_2)
+    plt.fill_between(x,noise-nsigma*sigma,noise+nsigma*sigma,label=txt, color='orange', alpha=.1)
+    add_labels(xlabel,ylabel,ttl)
     plt.legend
 
 def add_labels(xlbl,ylbl,ttl):
@@ -234,11 +259,55 @@ def two_y_plot(x,y1,y2,xlbl,y1_lbl,y2_lbl,ttl,txt=None,save=None):
         plt.savefig(str(ttl+".pdf"),format="pdf")
     plt.show()
     
+def simple_plot(x,y,x_label,y_label,ttl,show=None,save=None,lin_fit=None):
+    if lin_fit is not None:
+        linear_fit(x,y,1,plot=1)
+    plt.plot(x,y)
+    plt.xlabel(x_label)
+    plt.ylabel(y_label)
+    plt.title(ttl)
+    plt.legend()
+    if save is not None:
+        ttl.replace(" ","_")
+        plt.savefig(str(ttl+".pdf"),format="pdf")
+    if show is not None:
+        plt.show()
+        
+def simple_scatter(x,y,x_label,y_label,ttl,legend=None,show=None,save=None,lin_fit=None):
+    if lin_fit is not None:
+        linear_fit(x,y,1,plot=1)
+    plt.scatter(x,y,label="measurement data")
+    plt.xlabel(x_label)
+    plt.ylabel(y_label)
+    plt.title(ttl)
+    if legend is not None:
+        plt.legend()
+    if save is not None:
+        ttl.replace(" ","_")
+        plt.savefig(str(ttl+".pdf"),format="pdf")
+    if show is not None:
+        plt.show()
+
+def linear_fit(x,y,order,plot=None):
+    #Fit a polynomail of order to x and y values
+    coefs=poly.polyfit(x,y,order)
+    x_new=np.linspace(min(x),max(x)+1,num=len(x)*10)
+    ffit=poly.polyval(x_new,coefs)
+    #Calculate correlation of data sets
+    corrs=stats.pearsonr(x,y)
+    corr=round(corrs[0],3)
+    p_val=round(corrs[1],3)
+    txt=str("correlation = "+str(corr)+"\ntwo-tailed p value of "+str(p_val))
+    if plot is not None:
+        plt.plot(x_new,ffit,color="orange",label="least-square linear fit")
+        plt.text(0.5, -0.5, txt, horizontalalignment='center',verticalalignment='center',bbox=dict(alpha=0.5))
+    return
+    
     
 ######################
 #BELOW ARE ADDITIONAL FUNCTIONS FOR THE SIMMS STUDY
 def find_min_dst(x,n,k,limit):
-    #Finds the minimum Dst in a -n to +n-1 hour window
+    #Finds the minimum Dst in a -n/2 to n/2-1 hour window
     #If the minimum is among the last k<=n-1 values, the search is continued,
     #because a smaller minimum might be coming up in the next n values;
     #if not, the found minimum will be caught in the next search
@@ -246,7 +315,7 @@ def find_min_dst(x,n,k,limit):
         print("Your k parameter is larger than n-1, please give a smaller k")
         return False
     mini=min(x)
-    #Discard if mini among five last values
+    #Discard if mini among k last values
     discard=sum(mini==x[-k:])
     if discard==0:
         if mini in x and dst_below(mini,limit):
@@ -268,9 +337,8 @@ def dst_below(x,limit):
     
 def check_min_bz(x,limit):
     #Check if x consists of nans only
-    if np.all(x=='nan' or x is np.nan or x is float('nan') or np.isnan(x)):
+    if all_nans(x):
         return False
-    
     if np.nanmin(x)<limit:
         return True
     else:
@@ -298,7 +366,10 @@ def find_main_phase(x,start,limit,dst,dst_limit):
     #index for the search (use absolute index of x)
     #ind is iterated
     ind=start-1
-    while (x[ind]!=limit or dst[ind]<dst_limit):
+    #Continue until the monotonous series ends, the found Dst is above the threshold
+    #and the preceding Dst values are strictly smaller than the maximum
+    while (x[ind]!=limit or dst[ind+1]<dst_limit or not np.all(dst[ind-10:ind+1]<dst[ind+1])):
+    #while (x[ind]!=limit or dst[ind+1]<dst_limit):
         ind=ind-1
     ind=ind+1
     return ind
@@ -308,25 +379,16 @@ def find_after_storm():
     #Store the post storm phase related to a Dst drop
     1
     
-def find_recovery(dst,dst_limit,t):
-    #Check that Dst has sustainably recovered above the dst_limit
-    #Dst must be above dst_limit t time steps after the first occurrence
-    #of dst exceeding the dst_limit
+def find_recovery(dst,dst_limit):
+    #Check that Dst has recovered above the dst_limit
     #Returns the relative index number of dst recovery
-    ii=0
-    _found=False
-    while _found is False: 
-        ind_rec=np.where(dst[ii*t:]>dst_limit)[0][0]
-        ii=ii+1
-        if np.all(dst[ind_rec+(ii-1)*t:ind_rec+ii*t]>dst_limit):
-            _found=True
-    ind_rec=ind_rec+ii*t
+    ind_rec=np.where(dst>dst_limit)[0][0]
     return ind_rec
     
-def check_recovery(x,end,threshold):
-    #Check that there is at least 72 hours between storms
-    if sum(x[end:end+threshold])>1:
-        return False
+# def check_recovery(x,end,threshold):
+#     #Check that there is at least 72 hours between storms
+#     if sum(x[end:end+threshold])>1:
+#         return False
     
 def end_of_recovery(x,y,time):
     #Find whether the after storm recovery phase's end exceeds the data sets
@@ -337,4 +399,149 @@ def end_of_recovery(x,y,time):
         else:
             x[ii]=x[ii]+time
     return x
+
+def zip_list(x,y):
+    #Return a zipped list
+    result=zip(x,y)
+    result=list(result)
+
+    return result
+
+def contains_nan(x):
+    #Return True is x contains at least one nan
+    result=False
+    if not is_np_array(x):
+        x=[x]
+        x=np.asarray(x,dtype=np.float64)
+    for ii in range(len(x)):
+        if x[ii]=="nan" or x[ii] is np.nan or x[ii] is float('nan') or np.isnan(x[ii]):
+        #(x[ii]=="nan" or x[ii] is np.nan or x[ii] is float('nan') or np.isnan(x[ii])):
+            result=True
+            return result
+    return result
+
+def all_nans(x):
+    #Return True if x contains only nans
+    #Convert x to list to handle scalars
+    if not is_np_array(x):
+        x=[x]
+        x=np.asarray(x,dtype=np.float64)
+    for ii in range(len(x)):
+        if x[ii]=="nan" or x[ii] is np.nan or x[ii] is float('nan') or np.isnan(x[ii]):
+        #(x[ii]=="nan" or x[ii] is np.nan or x[ii] is float('nan') or np.isnan(x[ii])):
+            result=True
+        else:
+            result=False
+            return result            
+    return result
+
+def recurring_values(x,n):
+    #Check whether some value in x recurs at least n times in succession
+    grouped_x=[(k,sum(1 for ii in g)) for k,g in groupby(x)]
+    grouped_x=np.asarray(grouped_x)
+    if np.all(grouped_x[:,1]<n):
+        return False
+    else:
+        return True
+    
+def is_list(x):
+    if type(x)==list:
+        return True
+    
+def is_np_array(x):
+    if type(x)==np.array or type(x)==np.ndarray:
+        return True
+    
+
+def flatten_list(l, ltypes=(list, tuple)):
+    #Flattens a nested list of list or numpy arrays or numpy
+    #ndarrays into a one-dimensional list
+    ltype = type(l)
+    l = list(l)
+    i = 0
+    while i < len(l):
+        if is_np_array(l[i]):
+            l[i]=list(l[i])
+        while isinstance(l[i], ltypes):
+            if not l[i]:
+                l.pop(i)
+                i -= 1
+                break
+            else:
+                l[i:i + 1] = l[i]
+        i += 1
+    return ltype(l)
+
+def create_path(path,file):
+    #Concatenates the directory and the file name
+    #into a single path
+    if type(path)!=str:
+        print("Directory name must be a string")
+        exit
+    if type(file)!=str:
+        print("File name must be a string")
+        sys.exit()
+    if path[-1]!='/':
+        path=str(path+'/')
+    new_path=str(path+'/'+file)
+    return new_path
+
+def _zero_array(x):
+    #Create a 2D array of zeros with columns equal to the nbumber of input
+    #and rows equal to the length of one input array
+    cols=len(x)
+    rows=len(x[0])
+    return np.zeros([rows,cols])
+
+def _elements_equal(*args):
+    #Takes a number of equal length arrays and checks,
+    #how many of the indices are equal
+    #Collect inputs into columns in an array
+    arrs=_zero_array(args)
+    ii=0
+    for arg in args:
+        arrs[:,ii]=arg
+        ii=ii+1
+    
+    rows=np.shape(arrs)[0]
+    #Check how many times array elements are equal
+    summa=0
+    for ii in range(rows):
+        col_0=arrs[ii,0]
+        if np.all(arrs[ii,:]==col_0):
+            summa=summa+1
+    
+    return summa
         
+
+# def flatten_nparray(l, ltypes=(np.array, tuple)):
+#     ltype = list
+#     l = list(l)
+#     i = 0
+#     while i < len(l):
+#         while isinstance(l[i], ltypes):
+#             if not np.all(l[i]):
+#                 l.pop(i)
+#                 i -= 1
+#                 break
+#             else:
+#                 l[i:i + 1] = l[i]
+#         i += 1
+#     return ltype(l)
+
+# def flatten_npndarray(l, ltypes=(np.ndarray, tuple)):
+#     ltype = list
+#     l = list(l)
+#     i = 0
+#     while i < len(l):
+#         while isinstance(l[i], ltypes):
+#             if not np.all(l[i]):
+#                 l.pop(i)
+#                 i -= 1
+#                 break
+#             else:
+#                 l[i:i + 1] = l[i]
+#         i += 1
+#     return ltype(l)
+
+   
