@@ -1,6 +1,6 @@
 3.8.2020 by Mikko Savola
 
-Notes on files main_mi.py and aux2_mi.py for calculating mutual information.
+Notes on files main_mi.py and aux_mi.py for calculating mutual information.
 
 The file aux_mi.py contains auxiliary function for reading text files and plotting results.
 The file main_mi.py contains the class definition for creating objects and calculating mutual information.
@@ -30,3 +30,5 @@ obj._cont_entropy(x) evaluates the entropy of continuous variable x.
 obj._disc_entropy(x) evaluates the entropy of discrete variable x.
 
 obj._disc_jointentropy(x,y) evaluates the entropy of discrete variables x and y.
+
+The files find_storms.py, simms_analysis2_new.py, simms_replication_averages.py and mi_cond_solar_wind.py were used to replicate a study in JGR, "Prediction of relativistic electron flux at geostationary orbit following storms: Multiple regression analysis". find_storms.py finds the storms in the data sets, simms_analysis2_new.py calculates correlations and mutual informatiom from the storms, simms_replication_averages.py calculates the correlation from the storms as in the aforementioned study and mi_cond_solar_wind.py calculates the conditional mutual information between ULF power and electron flux, when conditioned on solar wind speed. The files e_flux.txt and ViRBO_ULF.txt contain the data from the satellite measurements used.
